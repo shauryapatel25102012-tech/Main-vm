@@ -1,0 +1,50 @@
+name: 24/7 Periodic Automation
+
+on:
+  schedule:
+    # Runs every 30 minutes (* */1 * * * for hourly, etc.)
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  run-automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # Short execution window
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip' # Optional: speed up dependency installs
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Execute Automation Script
+        env:
+          # Inject any required external API keys or webhook URLs
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python automation.py
+
+      - name: Commit and Push State Updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Only commit if state.json changed
+          if git status --porcelain | grep -q 'state.json'; then
+            git add state.json
+            git commit -m "chore(auto): update state [skip ci]"
+            git push
+          else
+            echo "No state changes to commit."
+          fi
+          
